@@ -1,0 +1,59 @@
+def tf_idf(column):
+    #max_df = 0.50 means "ignore terms that appear in more than 50% of the documents
+    #min_df = 0.01 means "ignore terms that appear in less than 1% of the documents".
+    #min_df = 5 means "ignore terms that appear in less than 5 documents".
+    
+    vectorizer = TfidfVectorizer(sublinear_tf=True, ngram_range=(1,1))
+    X = vectorizer.fit_transform(column)
+    terms = vectorizer.get_feature_names()
+    return X, terms
+
+def k_means(k, vector_values):
+    kmeans = KMeans(n_clusters=k, random_state=42)
+    # fit the model
+    kmeans.fit(vector_values)
+    # store cluster labels in a variable
+    clusters = kmeans.labels_
+    centroids = kmeans.cluster_centers_.argsort()[:, ::-1]
+    return clusters, centroids
+
+def top_words(cluster, dataframe, centroids, terms, column):
+    keys = []
+    values = []
+
+    order_centroids = centroids
+    
+    for index in order_centroids[cluster, :100]:
+        keys.append(terms[index])
+        count = 0
+        for i in dataframe.loc[dataframe['Cluster']==cluster][column].str.count(terms[index]):
+            if i > 0:
+                count += 1
+        percentage = count / len(dataframe.loc[dataframe['Cluster']==cluster]) * 100
+        values.append(percentage)
+
+    dictionary = dict(zip(keys, values))
+    sort_dictionary= dict(sorted(dictionary.items(), key=lambda item: item[1], reverse=True))
+    return sort_dictionary
+
+def rename_cluster(cluster, topterms, dataframe):
+    cluster_title = list(topterms.keys())[0]
+    dataframe['Cluster'] = dataframe['Cluster'].replace(cluster, cluster_title)
+    return dataframe
+
+def most_common_words(column, top):
+    most_common = pd.Series(' '.join(column).split()).value_counts()[:top]
+    return most_common
+
+def words_per_product(dataframe, column):
+    dataframe[column+' Tokens']= dataframe[column].apply(lambda row: set(nltk.word_tokenize(row)))
+    dataframe[column+' Token_count'] = dataframe.apply(lambda row: len(row[column+' Tokens']), axis=1)
+    token_countplt = dataframe.loc[dataframe[column+' Token_count'] < 15].groupby([column+' Token_count']).size()
+    plot = token_countplt.plot(kind='bar', ylabel='Number of products',xlabel='Word count per product', figsize=(6, 5));
+    ticks = [0, 5, 10, 15]
+    plot.set_xticks(ticks, minor=False);
+
+def lower_punctuation_numbers(dataframe, column):
+    dataframe[column] = dataframe[column].replace('[^A-Za-z\s]+', '', regex=True)
+    dataframe[column] = dataframe[column].str.lower()
+    dataframe[column] = dataframe[column].replace('\s+', ' ', regex=True)
